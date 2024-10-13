@@ -3,7 +3,7 @@ name: Update CNAME
 on:
   push:
     branches:
-      - main  # main 브랜치에 push될 때 실행
+      - main
 
 jobs:
   update-cname:
@@ -27,16 +27,16 @@ jobs:
 
       - name: Commit and push changes
         run: |
-          # 사용자 정보 설정
           git config --local user.email "202420505@eulji.ms.kr"
           git config --local user.name "GitHub Action"
 
-          # CNAME 파일만 추가하여 커밋
+          # CNAME 파일 추가
           git add CNAME
           
-          # CNAME 파일이 변경되었을 경우만 커밋
+          # CNAME 파일 변경이 있는 경우에만 커밋
           if git diff --cached --quiet; then
-            echo "No changes to CNAME file."
+            echo "No changes to commit."
           else
             git commit -m "Update CNAME"
             git push
+          fi
