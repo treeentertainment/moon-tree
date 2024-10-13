@@ -26,9 +26,14 @@ jobs:
           node updateCNAME.js
 
       - name: Commit and push changes
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           git config --local user.email "202420505@eulji.ms.kr"
           git config --local user.name "GitHub Action"
+          
+          # 푸시 권한을 얻기 위해 토큰을 사용하여 리모트 설정
+          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/202420505/moon-tree.git
 
           # CNAME 파일 추가
           git add CNAME
