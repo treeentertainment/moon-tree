@@ -1,32 +1,52 @@
-name: Apply Subdomain Changes
+name: Update CNAME records
 
 on:
   pull_request:
-    branches:
-      - main
-    paths:
-      - 'subdomain.json'
+    types: [closed]
 
 jobs:
-  apply-subdomain:
+  update-cname:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Install jq
+        uses: actions/checkout@v3
+      
+      - name: Install jq for JSON parsing
         run: sudo apt-get install jq
-
-      - name: Verify JSON syntax
+      
+      - name: Parse subdomain.json and update CNAMEs
         run: |
-          cat subdomain.json | jq .
-        shell: bash
+          # Read the subdomain.json file and process each record
+          cat subdomain.json | jq -c '.[]' | while read -r record; do
+            subdomain=$(echo $record | jq -r 'keys[0]')
+            cname=$(echo $record | jq -r '.[keys[0]]')
 
-      - name: Apply subdomain CNAME records to Cloudflare
-        if: github.event.pull_request.merged == true
-        run: |
-          ./deploy_subdomain.sh
-        env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+            echo "Updating $subdomain to point to $cname"
+
+            # Check if the DNS record already exists
+            record_id=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=CNAME&name=$subdomain.example.com" \
+              -H "Authorization: Bearer ${{ secrets.CF_API_TOKEN }}" \
+              -H "Content-Type: application/json" | jq -r '.result[0].id')
+
+            if [ "$record_id" != "null" ]; then
+              echo "Record found for $subdomain, updating it"
+              response=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$record_id" \
+                -H "Authorization: Bearer ${{ secrets.CF_API_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                --data "{\"type\":\"CNAME\",\"name\":\"$subdomain.example.com\",\"content\":\"$cname\",\"ttl\":3600,\"proxied\":false}")
+              echo "Update response: $response"
+            else
+              echo "No record found for $subdomain, creating a new one"
+              response=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+                -H "Authorization: Bearer ${{ secrets.CF_API_TOKEN }}" \
+                -H "Content-Type: application/json" \
+                --data "{\"type\":\"CNAME\",\"name\":\"$subdomain.example.com\",\"content\":\"$cname\",\"ttl\":3600,\"proxied\":false}")
+              echo "Create response: $response"
+            fi
+          done
+
+    env:
+      CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_EMAIL: ${{ secrets.CF_EMAIL }}
