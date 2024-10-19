@@ -14,10 +14,10 @@ jobs:
       
       - name: Install jq for JSON parsing
         run: sudo apt-get install jq
-
+      
       - name: Parse subdomain.json and update CNAMEs
         run: |
-          # Read the subdomain.json file
+          # Read the subdomain.json file and process each record
           cat subdomain.json | jq -c '.[]' | while read -r record; do
             subdomain=$(echo $record | jq -r 'keys[0]')
             cname=$(echo $record | jq -r '.[keys[0]]')
@@ -30,19 +30,19 @@ jobs:
               -H "Content-Type: application/json" | jq -r '.result[0].id')
 
             if [ "$record_id" != "null" ]; then
-              echo "Record found, updating it"
-              # Update the existing record
-              curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$record_id" \
+              echo "Record found for $subdomain, updating it"
+              response=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$record_id" \
                 -H "Authorization: Bearer ${{ secrets.CF_API_TOKEN }}" \
                 -H "Content-Type: application/json" \
-                --data "{\"type\":\"CNAME\",\"name\":\"$subdomain.example.com\",\"content\":\"$cname\",\"ttl\":3600,\"proxied\":false}"
+                --data "{\"type\":\"CNAME\",\"name\":\"$subdomain.example.com\",\"content\":\"$cname\",\"ttl\":3600,\"proxied\":false}")
+              echo "Update response: $response"
             else
-              echo "No record found, creating a new one"
-              # Create a new DNS record
-              curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
+              echo "No record found for $subdomain, creating a new one"
+              response=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records" \
                 -H "Authorization: Bearer ${{ secrets.CF_API_TOKEN }}" \
                 -H "Content-Type: application/json" \
-                --data "{\"type\":\"CNAME\",\"name\":\"$subdomain.example.com\",\"content\":\"$cname\",\"ttl\":3600,\"proxied\":false}"
+                --data "{\"type\":\"CNAME\",\"name\":\"$subdomain.example.com\",\"content\":\"$cname\",\"ttl\":3600,\"proxied\":false}")
+              echo "Create response: $response"
             fi
           done
 
